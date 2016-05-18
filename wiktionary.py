@@ -92,7 +92,7 @@ def handle(path, item):
         return True
 
     title = item['title'].encode('utf-8')
-    raw = item[u'revision']['text']['#text']
+    raw = item[u'revision']['text']['#text'].encode('utf-8')
 
     if filter_out(raw):
         return True
@@ -121,8 +121,7 @@ def build_tree(string):
             (n, label) = header(line)
             if height == -1 or height == n:
                 if pushdown_label != '' or pushdown != '':
-                    output[pushdown_label.encode(
-                        'utf-8')] = build_tree(pushdown.strip('\n').encode('utf-8'))
+                    output[pushdown_label] = build_tree(pushdown.strip('\n'))
                 height, pushdown_label, pushdown = n, label, ''
 
                 headed = True
@@ -132,11 +131,10 @@ def build_tree(string):
             pushdown += '\n'
 
     if height == -1:
-        return {"#text#": pushdown.encode('utf-8')}
+        return {"#text#": pushdown}
 
     if pushdown_label != '' or pushdown != '':
-        output[pushdown_label.encode(
-            'utf-8')] = build_tree(pushdown.strip('\n'))
+        output[pushdown_label] = build_tree(pushdown.strip('\n'))
 
     return output
 
@@ -150,7 +148,7 @@ def header(string):
         if m.group(1) != m.group(3):
             return False
         else:
-            return (len(m.group(1)), m.group(2).encode('utf-8'))
+            return (len(m.group(1)), m.group(2))
     return False
 
 
@@ -166,12 +164,11 @@ def process_tree(title, tree):
                 new_pos[part_of_speech] = new_pos.get(part_of_speech, 0) + 1
                 continue
             parts_of_speech[part_of_speech] += 1
-            print '=============================='
-            print title, language, part_of_speech, str(tree[language][part_of_speech]).encode('utf-8')
+            # print title, language, part_of_speech, tree[language][part_of_speech]
 
 
 def filter_out(raw):
-    # return False
+    return False
     for i, line in enumerate(raw.split('\n')):
         if i > 5:
             return True
