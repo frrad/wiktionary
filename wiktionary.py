@@ -105,7 +105,8 @@ def handle(path, item):
     if filter_out(raw):
         return True
 
-    tree = build_tree(raw)
+    tree = build_tree(raw.split('\n'))
+    # print '\n\n\n\n', tree
     process_tree(title, tree)
 
     if counter % 100 == 0:
@@ -117,46 +118,57 @@ def handle(path, item):
     return True
 
 
-def build_tree(string):
+def build_tree(string_list):
     output = dict()
-    pushdown = ''
+    pushdown = []
     height = -1
     pushdown_label = ''
 
-    for line in string.split('\n'):
+    for line in string_list:
         headed = False
         if header(line):
             (n, label) = header(line)
             if height == -1 or height == n:
-                if pushdown_label != '' or pushdown != '':
-                    output[pushdown_label] = build_tree(pushdown.strip('\n'))
-                height, pushdown_label, pushdown = n, label, ''
+                if pushdown_label != '' or pushdown != []:
+                    output[pushdown_label] = build_tree(pushdown)
+                height, pushdown_label, pushdown = n, label, []
 
                 headed = True
 
-        if not headed:
-            pushdown += line
-            pushdown += '\n'
+        if not headed and line != '':
+            pushdown += [line]
 
-    if height == -1:
-        return pushdown
+    if height == -1 and pushdown != []:
+        return '\n'.join(pushdown)
 
-    if pushdown_label != '' or pushdown != '':
-        output[pushdown_label] = build_tree(pushdown.strip('\n'))
+    if pushdown_label != '' or pushdown != []:
+        output[pushdown_label] = build_tree(pushdown)
 
     return output
 
 
 # If string is formatted ===Header=== return (#='s, 'Header') otherwise False
+header_cache = dict()
+
+
 def header(string):
-    m = re.match(r"(=*)([^=]*)(=*)$", string)
+    if len(string) == 0 or string[0] != '=':
+        return False
+    if string in header_cache:
+        return header_cache[string]
+
+    m = re.match("(=*)([^=]*)(=*)$", string)
     if m is not None:
         if len(m.group(1)) == 0:
+            header_cache[string] = False
             return False
         if m.group(1) != m.group(3):
+            header_cache[string] = False
             return False
         else:
+            header_cache[string] = (len(m.group(1)), m.group(2))
             return (len(m.group(1)), m.group(2))
+    header_cache[string] = False
     return False
 
 
@@ -177,14 +189,10 @@ def process_tree(title, tree):
                 entry))
 
 
-
-
 def store(language, word, part_of_speech, data):
     # Insert a row of data
     c.execute("INSERT INTO dictionary VALUES (?,?,?,?)",
               (language, word, part_of_speech,  data))
-
-
 
 
 def filter_out(raw):
