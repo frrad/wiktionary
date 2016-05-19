@@ -8,9 +8,17 @@ sys.setdefaultencoding('utf8')
 import xmltodict
 import bz2
 import re
+import json
+import sqlite3
+conn = sqlite3.connect('example.db')
+c = conn.cursor()
+
+# Create table
+c.execute('''CREATE TABLE dictionary
+             (language text, word text, part_of_speech text, data text)''')
 
 counter = 0
-cutoff = 10000
+cutoff = 1000
 new_pos = dict()
 
 
@@ -91,8 +99,8 @@ def handle(path, item):
     if '#text' not in item['revision']['text']:
         return True
 
-    title = item['title'].encode('utf-8')
-    raw = item[u'revision']['text']['#text'].encode('utf-8')
+    title = item['title']
+    raw = item[u'revision']['text']['#text']
 
     if filter_out(raw):
         return True
@@ -131,7 +139,7 @@ def build_tree(string):
             pushdown += '\n'
 
     if height == -1:
-        return {"#text#": pushdown}
+        return pushdown
 
     if pushdown_label != '' or pushdown != '':
         output[pushdown_label] = build_tree(pushdown.strip('\n'))
@@ -164,7 +172,19 @@ def process_tree(title, tree):
                 new_pos[part_of_speech] = new_pos.get(part_of_speech, 0) + 1
                 continue
             parts_of_speech[part_of_speech] += 1
-            # print title, language, part_of_speech, tree[language][part_of_speech]
+            entry = tree[language][part_of_speech]
+            store(language, title, part_of_speech, json.dumps(
+                entry))
+
+
+
+
+def store(language, word, part_of_speech, data):
+    # Insert a row of data
+    c.execute("INSERT INTO dictionary VALUES (?,?,?,?)",
+              (language, word, part_of_speech,  data))
+
+
 
 
 def filter_out(raw):
@@ -182,4 +202,12 @@ with bz2.BZ2File('enwiktionary-latest-pages-articles.xml.bz2', 'r') as f:
     try:
         xmltodict.parse(f, item_depth=2, item_callback=handle)
     except xmltodict.ParsingInterrupted:
-        print languages, parts_of_speech
+        print 'hit max number of entries to process'
+
+# Save (commit) the changes
+conn.commit()
+# Close connection
+conn.close()
+print languages, parts_of_speech
+print '=========='
+print new_pos, new_lang
