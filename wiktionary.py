@@ -102,14 +102,11 @@ def handle(path, item):
     title = item['title']
     raw = item[u'revision']['text']['#text']
 
-    if filter_out(raw):
-        return True
-
     tree = build_tree(raw.split('\n'))
-    # print '\n\n\n\n', tree
     process_tree(title, tree)
 
     if counter % 100 == 0:
+        print counter
         print 100 * float(counter) / cutoff
 
     if counter > cutoff:
@@ -120,37 +117,44 @@ def handle(path, item):
 
 def build_tree(string_list):
     output = dict()
-    pushdown = []
-    height = -1
-    pushdown_label = ''
+    index = []
+    height = 100
 
-    for line in string_list:
-        headed = False
-        if header(line):
-            (n, label) = header(line)
-            if height == -1 or height == n:
-                if pushdown_label != '' or pushdown != []:
-                    output[pushdown_label] = build_tree(pushdown)
-                height, pushdown_label, pushdown = n, label, []
+    for i, line in enumerate(string_list):
+        if not header(line):
+            continue
+        (n, title) = header(line)
+        if n <= height:
+            height = n
+            index.append((i, n, title))
 
-                headed = True
+    indax = [entry for entry in index if entry[1] == height]
 
-        if not headed and line != '':
-            pushdown += [line]
+    if len(indax) == 0:
+        return '\n'.join(string_list).strip('\n')
 
-    if height == -1 and pushdown != []:
-        return '\n'.join(pushdown)
+    # Untitled prefix
+    if indax[0][0] > 0:
+        output[''] = build_tree(string_list[:indax[0][0]])
+    # Tail
+    output[indax[-1][2]] = build_tree(string_list[indax[-1][0] + 1:])
 
-    if pushdown_label != '' or pushdown != []:
-        output[pushdown_label] = build_tree(pushdown)
+    # No intermediate piece
+    if len(indax) == 1:
+        return output
+
+    for rg in zip(indax[:-1], indax[1:]):
+        title = rg[0][2]
+        a, b = rg[0][0], rg[1][0]
+        output[title] = build_tree(string_list[a + 1:b])
 
     return output
 
 
-# If string is formatted ===Header=== return (#='s, 'Header') otherwise False
 header_cache = dict()
 
 
+# If string is formatted ===Header=== return (#='s, 'Header') otherwise False
 def header(string):
     if len(string) == 0 or string[0] != '=':
         return False
@@ -159,10 +163,7 @@ def header(string):
 
     m = re.match("(=*)([^=]*)(=*)$", string)
     if m is not None:
-        if len(m.group(1)) == 0:
-            header_cache[string] = False
-            return False
-        if m.group(1) != m.group(3):
+        if len(m.group(1)) == 0 or m.group(1) != m.group(3):
             header_cache[string] = False
             return False
         else:
@@ -170,6 +171,20 @@ def header(string):
             return (len(m.group(1)), m.group(2))
     header_cache[string] = False
     return False
+
+
+def summarize(entry):
+    if type(entry) == type(dict()):
+        if '' in entry:
+            return summarize(entry[''])
+        else:
+            return ''
+
+    entry = re.sub(r'\[\[([^\|\]]*)\|([^\|\]]*)\]\]', lambda x: x.group(2), entry)
+    entry = re.sub(r'\[\[([^\|\]]*)\]\]', lambda x: x.group(1), entry)
+    entry = re.sub(r'{{(([^|}]+)\|)+([^|}]+)}}', lambda x:  x.group(3), entry)
+
+    return entry
 
 
 def process_tree(title, tree):
@@ -185,26 +200,20 @@ def process_tree(title, tree):
                 continue
             parts_of_speech[part_of_speech] += 1
             entry = tree[language][part_of_speech]
+
+            print '\n\n\n\n\n', title.encode('utf-8'), language, part_of_speech, '\n============'
+            print summarize(entry).encode('utf-8')
+            print '============\n\n\n\n\n'
+
             store(language, title, part_of_speech, json.dumps(
                 entry))
 
 
 def store(language, word, part_of_speech, data):
-    # Insert a row of data
+    # Insert a row of
     c.execute("INSERT INTO dictionary VALUES (?,?,?,?)",
               (language, word, part_of_speech,  data))
 
-
-def filter_out(raw):
-    return False
-    for i, line in enumerate(raw.split('\n')):
-        if i > 5:
-            return True
-        if header(line):
-            (_, lang) = header(line)
-            if lang == 'Korean':
-                return False
-    return True
 
 with bz2.BZ2File('enwiktionary-latest-pages-articles.xml.bz2', 'r') as f:
     try:
